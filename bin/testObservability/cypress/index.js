@@ -19,30 +19,13 @@ const shouldSkipCommand = (command) => {
   return command.attributes.name == 'log' || (command.attributes.name == 'task' && (['test_observability_platform_details', 'test_observability_step', 'test_observability_command', 'browserstack_log', 'test_observability_log'].some(event => command.attributes.args.includes(event))));
 }
 
-// Cypress.on('log:added', (log) => {
-//   return () => {
-//     if (shouldSkipCommand(command)) {
-//       return;
-//     }
-//     eventsQueue.push({
-//       task: 'test_observability_step',
-//       data: {
-//         log,
-//         started_at: new Date().toISOString(),
-//         finished_at: new Date().toISOString()
-//       },
-//       options: { log: false }
-//     });
-//   }
-// });
-
 Cypress.on('log:changed', (attrs) => {
   if (!Cypress.env('BROWSERSTACK_O11Y_LOGS')) return;
   if (!attrs) return;
   if (attrs.state !== 'passed' && attrs.state !== 'failed') return;
 
   if (attrs.name === 'assert') {
-    const assertMessage = (attrs.message || '').replace(/\*\*/g, '');
+    const assertMessage = (attrs.message || '')
 
     eventsQueue.push({
       task: 'test_observability_command',
@@ -83,7 +66,7 @@ Cypress.on('log:changed', (attrs) => {
 
   const keyword = (attrs.name || '').trim();
   if (STEP_KEYWORDS.includes(keyword.toLowerCase())) {
-    const text = (attrs.message || '').replace(/\*\*/g, '');
+    const text = (attrs.message || '')
 
     eventsQueue.push({
       task: 'test_observability_step',
