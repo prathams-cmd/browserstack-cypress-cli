@@ -19,89 +19,88 @@ const shouldSkipCommand = (command) => {
   return command.attributes.name == 'log' || (command.attributes.name == 'task' && (['test_observability_platform_details', 'test_observability_step', 'test_observability_command', 'browserstack_log', 'test_observability_log'].some(event => command.attributes.args.includes(event))));
 }
 
-if (parseInt(Cypress.version.split('.')[0], 10) >= 13) {
-  Cypress.on('log:changed', (attrs) => {
-    if (!Cypress.env('BROWSERSTACK_O11Y_LOGS')) return;
-    if (!attrs) return;
-    if (attrs.state !== 'passed' && attrs.state !== 'failed') return;
+Cypress.on('log:changed', (attrs) => {
+  if (!Cypress.env('BROWSERSTACK_O11Y_LOGS')) return;
+  if (!attrs) return;
+  if (!attrs.createdAtTimestamp || !attrs.updatedAtTimestamp) return;
+  if (attrs.state !== 'passed' && attrs.state !== 'failed') return;
 
-    if (attrs.name === 'assert') {
-      const assertMessage = (attrs.message || '')
+  if (attrs.name === 'assert') {
+    const assertMessage = (attrs.message || '')
 
-      eventsQueue.push({
-        task: 'test_observability_command',
-        data: {
-          type: 'COMMAND_START',
-          command: {
-            attributes: {
-              id: attrs.id,
-              name: 'assert',
-              args: [assertMessage]
-            },
-            state: 'pending',
-            started_at: new Date(attrs.createdAtTimestamp).toISOString(),
-            location: testRunStarted ? 'test' : 'hook'
-          }
+    eventsQueue.push({
+      task: 'test_observability_command',
+      data: {
+        type: 'COMMAND_START',
+        command: {
+          attributes: {
+            id: attrs.id,
+            name: 'assert',
+            args: [assertMessage]
+          },
+          state: 'pending',
+          started_at: new Date(attrs.createdAtTimestamp).toISOString(),
+          location: testRunStarted ? 'test' : 'hook'
+        }
+      },
+      options: { log: false }
+    });
+
+    eventsQueue.push({
+      task: 'test_observability_command',
+      data: {
+        type: 'COMMAND_END',
+        command: {
+          attributes: {
+            id: attrs.id,
+            name: 'assert',
+            args: [assertMessage]
+          },
+          state: attrs.state,
+          finished_at: new Date(attrs.updatedAtTimestamp).toISOString(),
+          location: testRunStarted ? 'test' : 'hook'
+        }
+      },
+      options: { log: false }
+    });
+  }
+
+  const keyword = (attrs.name || '').trim();
+  if (STEP_KEYWORDS.includes(keyword.toLowerCase())) {
+    const text = (attrs.message || '')
+
+    eventsQueue.push({
+      task: 'test_observability_step',
+      data: {
+        log: {
+          name: 'step',
+          chainerId: attrs.chainerId,
+          consoleProps: { step: { keyword, text } }
         },
-        options: { log: false }
-      });
+        started_at: new Date(attrs.createdAtTimestamp).toISOString(),
+        finished_at: new Date(attrs.updatedAtTimestamp).toISOString()
+      },
+      options: { log: false }
+    });
 
-      eventsQueue.push({
-        task: 'test_observability_command',
-        data: {
-          type: 'COMMAND_END',
-          command: {
-            attributes: {
-              id: attrs.id,
-              name: 'assert',
-              args: [assertMessage]
-            },
-            state: attrs.state,
-            finished_at: new Date(attrs.updatedAtTimestamp).toISOString(),
-            location: testRunStarted ? 'test' : 'hook'
-          }
-        },
-        options: { log: false }
-      });
-    }
-
-    const keyword = (attrs.name || '').trim();
-    if (STEP_KEYWORDS.includes(keyword.toLowerCase())) {
-      const text = (attrs.message || '')
-
+    if (attrs.state === 'failed') {
       eventsQueue.push({
         task: 'test_observability_step',
         data: {
           log: {
-            name: 'step',
+            name: 'then',
+            type: 'child',
             chainerId: attrs.chainerId,
-            consoleProps: { step: { keyword, text } }
+            state: attrs.state,
+            err: attrs.err
           },
-          started_at: new Date(attrs.createdAtTimestamp).toISOString(),
           finished_at: new Date(attrs.updatedAtTimestamp).toISOString()
         },
         options: { log: false }
       });
-
-      if (attrs.state === 'failed') {
-        eventsQueue.push({
-          task: 'test_observability_step',
-          data: {
-            log: {
-              name: 'then',
-              type: 'child',
-              chainerId: attrs.chainerId,
-              state: attrs.state,
-              err: attrs.err
-            },
-            finished_at: new Date(attrs.updatedAtTimestamp).toISOString()
-          },
-          options: { log: false }
-        });
-      }
     }
-  });
-}
+  }
+});
 
 Cypress.on('command:start', (command) => {
 
