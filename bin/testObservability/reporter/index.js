@@ -332,6 +332,16 @@ class MyReporter {
 
   uploadTestSteps = async (shouldClearCurrentSteps = true, cypressSteps = null) => {    
     const currentTestSteps = cypressSteps ? cypressSteps : JSON.parse(JSON.stringify(this.currentTestSteps));
+    
+    // This prevents subsequent Mocha events from grabbing the same stale steps.
+    if(shouldClearCurrentSteps && !cypressSteps) {
+      this.currentTestSteps = [];
+    }
+
+    if (!currentTestSteps || currentTestSteps.length === 0) {
+      return;
+    }
+
     /* TODO - Send as test logs */
     const allStepsAsLogs = [];
     currentTestSteps.forEach(step => {
@@ -350,11 +360,11 @@ class MyReporter {
       };
       allStepsAsLogs.push(currentStepAsLog);
     });
+    
     await uploadEventData({
       event_type: 'LogCreated',
       logs: allStepsAsLogs
     });
-    if(shouldClearCurrentSteps) this.currentTestSteps = [];
   }
 
   sendTestRunEvent = async (test, err = undefined, customFinished=false, eventType = "TestRunFinished") => {
